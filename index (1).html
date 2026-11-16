@@ -1,0 +1,1172 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>WebGIS 3D Kadaster – Sukarame, Bandar Lampung</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<style>
+:root{--bg:#14171c;--bg2:#0c0e11;--line:#2b313a;--txt:#e6e9ee;--mut:#8b94a3;--acc:#00e5ff;--ok:#4ade80;--bad:#f87171;--warn:#fbbf24;--hh:50px}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#0b0d10;color:var(--txt);font-size:13px;overflow:hidden}
+/* ===== layout terpisah: header | kiri | peta | kanan ===== */
+#top{height:var(--hh);display:flex;align-items:center;gap:10px;padding:0 12px;background:var(--bg);border-bottom:1px solid var(--line)}
+#top h1{font-size:15px;margin:0;color:var(--acc);white-space:nowrap}
+#top h1 small{color:var(--mut);font-weight:500;margin-left:6px}
+#top .sp{flex:1}
+#top select{width:auto;padding:6px 8px;font-size:12px}
+#main{display:flex;height:calc(100% - var(--hh))}
+#left{width:340px;flex:none;background:var(--bg);border-right:1px solid var(--line);overflow:auto;padding:12px}
+#left.hide{display:none}
+#mapwrap{flex:1;position:relative;min-width:0}
+#map{position:absolute;inset:0}
+#info{width:370px;flex:none;background:var(--bg);border-left:1px solid var(--line);overflow:auto;padding:16px;display:none}
+/* legenda: di dalam area peta, tidak menyentuh panel */
+#legend{position:absolute;left:10px;bottom:38px;background:rgba(20,23,28,.92);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:12px;z-index:2;max-width:200px}
+#legend b{display:block;margin-bottom:3px}
+#legend div{display:flex;align-items:center;gap:7px;margin:2px 0}
+#legend i{width:11px;height:11px;border-radius:3px;display:inline-block;flex:none}
+/* ===== komponen ===== */
+details{border:1px solid var(--line);border-radius:10px;margin-bottom:10px;background:#181c22}
+summary{cursor:pointer;padding:10px 12px;font-weight:700;color:var(--acc);font-size:12px;letter-spacing:.4px;text-transform:uppercase;list-style:none}
+summary::before{content:"▸ "}details[open] summary::before{content:"▾ "}
+.dbody{padding:0 12px 12px}
+.src{color:var(--mut);font-size:11px;line-height:1.45;margin:0 0 8px}
+table.z{width:100%;border-collapse:collapse}
+table.z th{font-size:10.5px;color:var(--mut);text-align:center;font-weight:600;padding:3px 2px}
+table.z th:first-child,table.z td:first-child{text-align:left}
+table.z td{padding:4px 2px;border-top:1px solid var(--line);font-size:11.5px;vertical-align:middle}
+table.z input{width:58px;text-align:center;padding:5px 2px;font-size:12px;border-radius:6px}
+label.f{display:block;margin:10px 0 4px;color:var(--mut);font-size:12px}
+select,input[type=text],input[type=number],input[type=password]{width:100%;background:var(--bg2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:9px 10px;font-size:13px;outline:none}
+select:focus,input:focus{border-color:var(--acc)}
+.note{font-size:11px;color:var(--warn);margin-top:8px;line-height:1.4}
+.btn{border:1px solid var(--line);background:#23282f;color:var(--txt);border-radius:8px;padding:8px 12px;cursor:pointer;font-weight:600;font-size:12.5px;white-space:nowrap}
+.btn:hover{filter:brightness(1.2)}
+.btn.edit{background:#12303a;border-color:#1b6f80;color:#7fe7f7}
+.btn.del{background:#2d1618;border-color:#7a2d33;color:#ff8f8f}
+.btn.save{background:#1a73e8;border-color:#1a73e8;color:#fff}
+.btn.on{background:#12303a;border-color:var(--acc);color:var(--acc)}
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cards div{background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.cards b{display:block;font-size:18px}.cards span{color:var(--mut);font-size:11px}
+.cards .g b{color:var(--ok)}.cards .r b{color:var(--bad)}
+/* info */
+#info .hd{display:flex;justify-content:space-between;align-items:baseline;padding-bottom:10px;border-bottom:1px solid var(--line);margin-bottom:8px}
+#info h2{margin:0;font-size:17px;color:var(--acc)}
+#info .id{color:var(--mut);font-size:11px;font-weight:700}
+.kv{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px dashed var(--line)}
+.kv span:first-child{color:var(--mut);font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:.2px;padding-top:1px}
+.kv span:last-child{font-weight:700;text-align:right}
+.kv.hl span{color:var(--acc)}
+.sec{margin:14px 0 4px;font-size:11px;font-weight:800;letter-spacing:.6px;color:var(--acc);text-transform:uppercase}
+.badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:800}
+.badge.ok{background:rgba(74,222,128,.15);color:var(--ok)}
+.badge.bad{background:rgba(248,113,113,.15);color:var(--bad)}
+.badge.na{background:rgba(148,163,184,.15);color:#94a3b8}
+.bar{height:6px;background:#2a3038;border-radius:4px;margin:2px 0 4px;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:4px}
+.formula{font-size:10.5px;color:var(--mut);margin-top:2px}
+.actions{display:flex;gap:8px;margin-top:16px}.actions .btn{flex:1}
+/* modal */
+#modal,#tokenbox{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:center;justify-content:center;z-index:30}
+.card{background:#101214;border:1px solid var(--line);border-radius:14px;padding:20px;width:min(400px,92vw);max-height:92vh;overflow:auto}
+.card h3{margin:0 0 6px;color:var(--acc)}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+#msg{cursor:pointer;line-height:1.45;position:fixed;bottom:14px;left:50%;transform:translateX(-50%);background:#3a1518;border:1px solid #7a2d33;padding:10px 14px;border-radius:10px;z-index:40;display:none;max-width:90vw}
+#loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(11,13,16,.7);z-index:3;color:var(--acc);font-weight:700}
+.maplibregl-ctrl-bottom-left{z-index:1}
+/* digitasi */
+#drawbar{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:4;display:none;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;background:rgba(20,23,28,.96);border:1px solid var(--acc);border-radius:10px;padding:8px 10px;max-width:calc(100% - 120px);box-shadow:0 6px 22px rgba(0,0,0,.45)}
+#drawbar #drawtxt{font-size:12px;font-weight:700;color:var(--acc)}
+.drawbtns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.chk{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px;color:var(--mut)}.chk input{width:auto}
+input:disabled{opacity:.45;cursor:not-allowed}
+.pill{font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:99px;background:#23282f;color:var(--mut);border:1px solid var(--line);white-space:nowrap}
+.pill.ok{background:rgba(74,222,128,.12);color:var(--ok);border-color:#235c3a}
+.pill.bad{background:rgba(248,113,113,.12);color:var(--bad);border-color:#7a2d33}
+#loginbox{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:center;justify-content:center;z-index:30}
+.err{color:var(--bad);font-size:12px;min-height:16px;margin-top:8px}
+.aoi-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px dashed var(--line)}
+.aoi-row input{width:auto;margin:0}
+.aoi-sw{width:12px;height:12px;border-radius:3px;flex:none;border:1px solid rgba(255,255,255,.35)}
+.aoi-n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.aoi-n small{display:block;color:var(--mut);font-weight:500;font-size:10.5px}
+.aoi-row .btn{padding:4px 8px;font-size:12px}
+@media(max-width:820px){
+  #top h1 small{display:none}
+  #left{position:fixed;top:var(--hh);left:0;bottom:0;z-index:15;width:min(340px,92vw)}
+  #info{position:fixed;left:0;right:0;bottom:0;width:auto;max-height:55%;z-index:15;border-left:0;border-top:1px solid var(--line)}
+  #legend{display:none}
+}
+</style>
+<script>
+/* ======================= KONFIGURASI FIREBASE =======================
+   Isi dengan "firebaseConfig" dari Firebase Console → Project settings → Your apps (Web).
+   Jika apiKey dikosongkan, aplikasi berjalan dalam MODE LOKAL (perubahan hanya di browser). */
+window.APP_CFG = { firebase: {
+  apiKey: "",
+  authDomain: "dkadaster-7278b.firebaseapp.com",
+  projectId: "dkadaster-7278b",
+  storageBucket: "dkadaster-7278b.firebasestorage.app",
+  messagingSenderId: "374957455511",
+  appId: "1:374957455511:web:74d95bd552971620e151d2",
+  measurementId: "G-515LZCDJF2"
+}};
+</script>
+</head>
+<body>
+<header id="top">
+  <button class="btn" id="btnLeft" title="Panel parameter">☰</button>
+  <h1>WebGIS 3D Kadaster<small>Sukarame, Bandar Lampung</small></h1>
+  <span class="sp"></span>
+  <select id="warna" title="Pewarnaan">
+    <option value="fungsi">Warna: fungsi bangunan</option>
+    <option value="kepatuhan">Warna: kepatuhan KDB/KLB/KDH</option>
+  </select>
+  <select id="basemap" title="Peta dasar">
+    <option value="positron">Terang – CARTO Positron (ringan)</option>
+    <option value="dark">Gelap – CARTO Dark Matter</option>
+    <option value="osm">OpenStreetMap</option>
+    <option value="esri">Satelit – Esri World Imagery</option>
+    <option value="topo">Topografi – OpenTopoMap</option>
+    <option value="kosong">Tanpa peta dasar (paling ringan)</option>
+  </select>
+  <button class="btn" id="btn3d" title="Ganti 2D / 3D">3D</button>
+  <span class="pill" id="cloud">Mode lokal</span>
+  <button class="btn" id="btnFile" title="Pilih file GeoJSON secara manual">📂</button>
+  <input type="file" id="fileIn" accept=".geojson,.json" multiple style="display:none">
+  <button class="btn" id="btnExp">⬇ Ekspor</button>
+</header>
+
+<div id="main">
+  <aside id="left">
+    <details open>
+      <summary>Ringkasan</summary>
+      <div class="dbody"><div class="cards" id="stats"></div></div>
+    </details>
+    <details open>
+      <summary>Digitasi</summary>
+      <div class="dbody">
+        <p class="src" id="drawInfo">Gambar bidang tanah (2D) atau bangunan (3D) baru langsung di peta. Hasilnya tersimpan di Firestore (koleksi <code>bidang_digit</code> / <code>bangunan_digit</code>) dan tampil bagi semua pengguna.</p>
+        <div class="drawbtns"><button class="btn edit" id="btnDrawP">＋ Bidang tanah (2D)</button><button class="btn edit" id="btnDrawB">＋ Bangunan (3D)</button></div>
+        <button class="btn edit" id="btnAoi" style="width:100%;margin-top:8px" title="Impor file GeoJSON sebagai AOI (layer referensi digitasi)">⬆ Impor AOI (GeoJSON)</button>
+        <input type="file" id="aoiIn" accept=".geojson,.json" multiple style="display:none">
+        <p class="src" style="margin:6px 0 0">AOI tampil sebagai layer referensi (tidak ikut perhitungan KDB/KLB). Sembunyikan atau hapus di panel Layer.</p>
+        <label class="chk"><input type="checkbox" id="snapOn" checked> Snap ke titik terdekat (bidang/bangunan)</label>
+        <p class="src" style="margin-top:8px">Klik untuk menambah titik · klik titik pertama / dobel-klik / Enter = selesai · Backspace = urungkan · Esc = batal.</p>
+      </div>
+    </details>
+    <details open>
+      <summary>Layer</summary>
+      <div class="dbody" style="display:grid;gap:6px">
+        <label><input type="checkbox" data-vis="bangunan" style="width:auto"> Bangunan 3D</label>
+        <label><input type="checkbox" data-vis="bidang" style="width:auto"> Bidang tanah</label>
+        <label><input type="checkbox" data-vis="batas" style="width:auto"> Batas wilayah (Sukarame)</label>
+        <div class="sec" style="margin:8px 0 0">AOI (impor GeoJSON)</div>
+        <div id="aoiList"></div>
+      </div>
+    </details>
+    <details open>
+      <summary>Basis Data</summary>
+      <div class="dbody"><p class="src" id="cloudInfo" style="margin:0"></p></div>
+    </details>
+    <details open>
+      <summary>Parameter Zona (Perda)</summary>
+      <div class="dbody">
+        <p class="src">Sumber: Perda Kota Bandar Lampung No. 07/2014 tentang Bangunan Gedung. Nilai dapat diubah sesuai zona/kawasan.</p>
+        <table class="z" id="ztable"></table>
+        <div class="note">⚠ KDH mengikuti tabel Perda yang diberikan. Nilai awal KDB &amp; KLB hanyalah <b>nilai contoh</b>, ganti sesuai ketentuan yang berlaku.</div>
+        <div class="note" id="zhint" style="display:none;color:var(--mut)">Menunggu koneksi ke Firestore…</div>
+        <div style="margin-top:10px"><button class="btn" id="btnReset">Reset nilai</button></div>
+      </div>
+    </details>
+    <details open>
+      <summary>Pengaturan Perhitungan</summary>
+      <div class="dbody">
+        <label class="f" style="margin-top:0">Zona yang dipakai</label>
+        <select id="zonaOverride"></select>
+        <label class="f">Tinggi per lantai (m), untuk estimasi jumlah lantai</label>
+        <input type="number" id="tinggiLantai" min="2" max="8" step="0.5">
+      </div>
+    </details>
+    <details>
+      <summary>Rumus</summary>
+      <div class="dbody"><p class="src">
+        KDB aktual = lantai dasar ÷ luas lahan × 100%<br>
+        Lantai dasar maks = KDB izin × luas lahan<br>
+        KLB aktual = total semua lantai ÷ luas lahan<br>
+        Total lantai maks = KLB izin × luas lahan<br>
+        Area hijau minimal = KDH izin × luas lahan</p></div>
+    </details>
+  </aside>
+
+  <div id="mapwrap">
+    <div id="map"></div>
+    <div id="legend"></div>
+    <div id="drawbar"><span id="drawtxt"></span><button class="btn" id="dUndo">↶ Urungkan</button><button class="btn save" id="dDone">✔ Selesai</button><button class="btn del" id="dCancel">✕ Batal</button></div>
+    <div id="loading">Memuat data…</div>
+  </div>
+
+  <aside id="info"></aside>
+</div>
+
+<!-- Form edit -->
+<div id="modal"><div class="card">
+  <h3 id="mtitle">Edit</h3>
+  <label class="f">Nomor Induk Bidang (NIB):</label>
+  <input type="text" id="e_nib" placeholder="Contoh: 08.01.01.01.12345">
+  <div class="g2">
+    <div id="g_lb"><label class="f">Luas Bangunan (m²):</label><input type="number" step="any" id="e_lb"></div>
+    <div id="g_lbd"><label class="f">Luas Bidang (m²):</label><input type="number" step="any" id="e_lbd"></div>
+  </div>
+  <div id="g_fungsi">
+    <label class="f">Fungsi Bangunan:</label>
+    <select id="e_fungsi">
+      <option value="Permukiman">Rumah / Permukiman</option>
+      <option value="Komersial">Toko / Komersial</option>
+      <option value="Pendidikan">Sekolah / Pendidikan</option>
+      <option value="Kesehatan">Puskesmas / Kesehatan</option>
+      <option value="Pemerintahan">Kantor Pemerintahan</option>
+      <option value="Infrastruktur">Infrastruktur Umum</option>
+    </select>
+    <label class="f">Jumlah lantai (kosongkan = estimasi dari tinggi):</label>
+    <input type="number" id="e_lantai" min="1" step="1">
+    <div id="g_tinggi" style="display:none"><label class="f">Tinggi bangunan (m), untuk tampilan 3D:</label>
+    <input type="number" id="e_tinggi" min="0" step="0.5" placeholder="kosong = lantai × tinggi per lantai"></div>
+  </div>
+  <div class="g2" id="g_hs">
+    <div><label class="f">Tipe Hak:</label>
+      <select id="e_hak"><option value="">-- Pilih --</option><option>SHM</option><option>HGB</option><option>Hak Pakai</option><option>Girik</option><option>Tanah Negara</option></select></div>
+    <div><label class="f">Status Tanah:</label>
+      <select id="e_status"><option value="">-- Pilih --</option><option>Aman</option><option>Proses BPN</option><option>Sengketa</option></select></div>
+  </div>
+  <div id="g_zona"><label class="f">Zona (override bidang ini):</label>
+  <select id="e_zona"></select></div>
+  <div class="actions"><button class="btn save" id="bSave">💾 Simpan</button><button class="btn del" id="bDel">🗑 Hapus</button><button class="btn" id="bReset" title="Kembalikan ke data asli">↩ Asli</button><button class="btn" id="bCancel">Batal</button></div>
+</div></div>
+
+<div id="msg"></div>
+
+<script>
+/* ================= KONFIGURASI ================= */
+/* KDH = tabel Perda 07/2014. KDB & KLB = NILAI CONTOH, ubah sesuai Perda/RTRW. */
+let ZONA_DEFAULT = {"perumahan": {"nama": "Perumahan", "kdb": 60, "klb": 1.2, "kdh": 20, "pasal": "Ps. 71 ayat 2"}, "perumahan_lereng": {"nama": "Perumahan, lereng >15%", "kdb": 40, "klb": 0.8, "kdh": 40, "pasal": "Ps. 71(2) b.4"}, "perdagangan": {"nama": "Perdagangan dan jasa", "kdb": 70, "klb": 2.8, "kdh": 20, "pasal": "Ps. 72"}, "perkantoran": {"nama": "Perkantoran", "kdb": 60, "klb": 2.4, "kdh": 20, "pasal": "Ps. 73"}, "fasum": {"nama": "Fasilitas umum dan sosial", "kdb": 60, "klb": 1.8, "kdh": 30, "pasal": "Ps. 71 ayat 3"}, "mangrove": {"nama": "Ekosistem mangrove", "kdb": 10, "klb": 0.1, "kdh": 90, "pasal": "Ps. 64"}};
+const FUNGSI_ZONA = {Permukiman:'perumahan',Komersial:'perdagangan',Pendidikan:'fasum',Kesehatan:'fasum',Pemerintahan:'perkantoran',Infrastruktur:'fasum'};
+const WARNA_FUNGSI = {Permukiman:'#f4d35e',Komersial:'#ee6c4d',Pendidikan:'#3d9be9',Kesehatan:'#e05fa0',Pemerintahan:'#9b5de5',Infrastruktur:'#9aa5b1'};
+const WARNA_OK = {ok:'#4ade80',lebih:'#f87171',nodata:'#94a3b8',kosong:'#64748b'};
+
+/* ================= UTIL ================= */
+const $ = s => document.querySelector(s);
+const fmt = (n,d=2) => (n===null||n===undefined||isNaN(n)) ? '-' : Number(n).toLocaleString('id-ID',{maximumFractionDigits:d});
+const store = {
+  get(k,def){try{const v=localStorage.getItem(k);return v?JSON.parse(v):def}catch(e){return def}},
+  set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+};
+const esc = s => String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fc = a => ({type:'FeatureCollection',features:a});
+let msgT;
+function msg(m,ms=9000){const e=$('#msg');e.textContent=m;e.style.display='block';e.onclick=()=>e.style.display='none';clearTimeout(msgT);if(ms)msgT=setTimeout(()=>e.style.display='none',ms)}
+
+/* ================= STATE ================= */
+let ZONA = {};
+const FB = (window.APP_CFG||{}).firebase||{};
+const CLOUD = {configured:!!FB.apiKey, ready:false, user:null, err:''};
+function initZona(){
+  ZONA = JSON.parse(JSON.stringify(ZONA_DEFAULT));
+  const saved = CLOUD.configured ? null : store.get('zona',null);
+  if(saved) for(const k in saved) if(ZONA[k]) Object.assign(ZONA[k],saved[k]);
+}
+initZona();
+const S = Object.assign({zonaOverride:'auto',tinggiLantai:4,warna:'fungsi',basemap:'positron',vis:{bidang:true,bangunan:true,batas:true}},store.get('settings',{}));
+S.vis=Object.assign({bidang:true,bangunan:true,batas:true},S.vis||{});
+let buildings=[], parcels=[], bById=new Map(), pById=new Map();
+let ALL_P=[], ALL_B=[];
+let selected=null, map, is3d=true;
+
+/* ===== Peta dasar raster (ringan, tanpa token) ===== */
+const raster=(tiles,attr,maxzoom=19)=>({version:8,sources:{b:{type:'raster',tiles,tileSize:256,maxzoom,attribution:attr}},layers:[{id:'b',type:'raster',source:'b'}]});
+const CARTO='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>';
+const BASEMAPS={
+  positron:{dark:false,style:raster(['a','b','c','d'].map(s=>`https://${s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png`),CARTO)},
+  dark:{dark:true,style:raster(['a','b','c','d'].map(s=>`https://${s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png`),CARTO)},
+  osm:{dark:false,style:raster(['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],'© OpenStreetMap contributors')},
+  esri:{dark:true,style:raster(['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],'Tiles © Esri, Maxar, Earthstar Geographics',19)},
+  topo:{dark:false,style:raster(['a','b','c'].map(s=>`https://${s}.tile.opentopomap.org/{z}/{x}/{y}.png`),'© OpenStreetMap, SRTM | © OpenTopoMap (CC-BY-SA)',17)},
+  kosong:{dark:true,style:{version:8,sources:{},layers:[{id:'bg',type:'background',paint:{'background-color':'#1b1f26'}}]}}
+};
+if(!BASEMAPS[S.basemap]) S.basemap='positron';
+const bm=()=>BASEMAPS[S.basemap];
+
+/* ================= DATA DARI FOLDER data/ ================= */
+// Daftar kandidat nama file (dicoba berurutan). Ubah sesuai nama file di repo Anda.
+const DATA={
+  bangunan:['data/bangunan_3d.geojson','data/export_lod1_dengan_tinggi.geojson','data/bangunan.geojson'],
+  bidang:  ['data/bidang_tanah.geojson','data/bidang.geojson'],
+  // Data persil AOI tambahan. File ini digabung dengan bidang lama, bukan menggantikannya.
+  bidangTambahan:['data/bidang_aoi_sementara_nib.geojson'],
+  batas:   ['data/batas_sukarame.geojson','data/shp_sukarame.json','data/batas_kecamatan.geojson','data/batas.geojson']
+};
+let BATAS=null;
+function utmInv(x,y){               // UTM 48S → WGS84 (untuk file batas yang belum direproyeksi)
+  const a=6378137,f=1/298.257223563,k0=0.9996,e2=f*(2-f),ep2=e2/(1-e2),e1=(1-Math.sqrt(1-e2))/(1+Math.sqrt(1-e2));
+  x-=500000; y-=1e7; const mu=(y/k0)/(a*(1-e2/4-3*e2*e2/64-5*e2**3/256));
+  const p1=mu+(3*e1/2-27*e1**3/32)*Math.sin(2*mu)+(21*e1*e1/16-55*e1**4/32)*Math.sin(4*mu)+(151*e1**3/96)*Math.sin(6*mu)+(1097*e1**4/512)*Math.sin(8*mu);
+  const s=Math.sin(p1),c=Math.cos(p1),tn=Math.tan(p1),N1=a/Math.sqrt(1-e2*s*s),T1=tn*tn,C1=ep2*c*c,R1=a*(1-e2)/Math.pow(1-e2*s*s,1.5),D=x/(N1*k0);
+  const lat=p1-(N1*tn/R1)*(D*D/2-(5+3*T1+10*C1-4*C1*C1-9*ep2)*D**4/24+(61+90*T1+298*C1+45*T1*T1-252*ep2-3*C1*C1)*D**6/720);
+  const lon=(D-(1+2*T1+C1)*D**3/6+(5-2*C1+28*T1-3*C1*C1+8*ep2+24*T1*T1)*D**5/120)/c;
+  return [105+lon*180/Math.PI,lat*180/Math.PI];
+}
+function normalizeBatas(gj){
+  if(!gj||!gj.features||!gj.features.length) return null;
+  const first=(function f(c){return typeof c[0]==='number'?c:f(c[0])})(gj.features.find(x=>x.geometry).geometry.coordinates);
+  if(Math.abs(first[0])>180||Math.abs(first[1])>90){            // koordinat meter (UTM) → ubah ke lon/lat
+    const mp=c=>typeof c[0]==='number'?utmInv(c[0],c[1]):c.map(mp);
+    gj={type:'FeatureCollection',features:gj.features.filter(x=>x.geometry).map(x=>({type:'Feature',properties:x.properties||{},geometry:{type:x.geometry.type,coordinates:mp(x.geometry.coordinates)}}))};
+    console.info('Batas wilayah: koordinat UTM 48S dikonversi ke lon/lat otomatis');
+  }
+  return gj;
+}
+async function fetchFirst(list,wajib=true){
+  for(const u of list){
+    try{const r=await fetch(encodeURI(u)); if(r.ok) return {url:u,json:await r.json()};}catch(e){}
+  }
+  if(wajib) throw new Error('File tidak ditemukan di folder data/: '+list[0]);
+  return null;
+}
+async function loadAll(){
+  const step=s=>{const l=$('#loading'); if(l) l.textContent=s};
+  step('Memuat data bangunan…'); const b=await fetchFirst(DATA.bangunan);
+  step('Memuat data bidang tanah lama…'); const p=await fetchFirst(DATA.bidang);
+  // Tambahkan persil AOI baru. Jika file tambahan belum ada, layer lama tetap berjalan.
+  step('Memuat data NIB AOI tambahan…');
+  const pa=await fetchFirst(DATA.bidangTambahan,false);
+  let bidangGabungan=p.json;
+  if(pa&&pa.json&&Array.isArray(pa.json.features)){
+    const lama=Array.isArray(p.json.features)?p.json.features:[];
+    const tambahan=pa.json.features.filter(f=>f&&f.geometry);
+    bidangGabungan={...p.json,type:'FeatureCollection',features:[...lama,...tambahan]};
+    console.info('Bidang lama dipertahankan:',lama.length,'| bidang AOI tambahan:',tambahan.length);
+  }else{
+    console.info('GeoJSON NIB AOI tambahan tidak ditemukan; menggunakan bidang lama saja.');
+  }
+  step('Memuat batas wilayah…'); const bt=await fetchFirst(DATA.batas,false);
+  return {b:b.json,p:bidangGabungan,batas:bt&&bt.json};
+}
+
+/* ===== Pemrosesan di browser: luas metrik (UTM 48S) + spatial join bangunan→bidang ===== */
+const T_DEF=3, MIN_OVERLAP=0.3, GCS=0.001;
+const num=v=>{const n=parseFloat(v);return isFinite(n)?n:0};
+const txt=v=>v==null?'':String(v).trim();
+function utm(lon,lat){            // WGS84 → UTM zona 48 Selatan (EPSG:32748)
+  const a=6378137,f=1/298.257223563,k0=0.9996,e2=f*(2-f),ep2=e2/(1-e2),e4=e2*e2,e6=e4*e2;
+  const phi=lat*Math.PI/180, A=(lon-105)*Math.PI/180*Math.cos(phi), s=Math.sin(phi), tn=Math.tan(phi);
+  const N=a/Math.sqrt(1-e2*s*s), T=tn*tn, C=ep2*Math.cos(phi)**2;
+  const M=a*((1-e2/4-3*e4/64-5*e6/256)*phi-(3*e2/8+3*e4/32+45*e6/1024)*Math.sin(2*phi)+(15*e4/256+45*e6/1024)*Math.sin(4*phi)-(35*e6/3072)*Math.sin(6*phi));
+  return [k0*N*(A+(1-T+C)*A**3/6+(5-18*T+T*T+72*C-58*ep2)*A**5/120)+500000,
+          k0*(M+N*tn*(A*A/2+(5-T+9*C+4*C*C)*A**4/24+(61-58*T+T*T+600*C-330*ep2)*A**6/720))+1e7];
+}
+function ringArea(r){
+  const o=utm(r[0][0],r[0][1]); const p=r.map(c=>{const q=utm(c[0],c[1]);return [q[0]-o[0],q[1]-o[1]]});
+  let s=0; for(let i=0;i<p.length-1;i++) s+=p[i][0]*p[i+1][1]-p[i+1][0]*p[i][1]; return Math.abs(s/2);
+}
+function geomArea(g){
+  let A=0; for(const poly of (g.type==='Polygon'?[g.coordinates]:g.coordinates)){A+=ringArea(poly[0]);for(let k=1;k<poly.length;k++)A-=ringArea(poly[k])}
+  return A;
+}
+function pipRing(x,y,r){let ins=false;for(let i=0,j=r.length-1;i<r.length;j=i++){const xi=r[i][0],yi=r[i][1],xj=r[j][0],yj=r[j][1];if((yi>y)!==(yj>y)&&x<(xj-xi)*(y-yi)/(yj-yi)+xi)ins=!ins}return ins}
+function pipPoly(x,y,p){if(!pipRing(x,y,p[0]))return false;for(let k=1;k<p.length;k++)if(pipRing(x,y,p[k]))return false;return true}
+const pip=(x,y,g)=>g.type==='Polygon'?pipPoly(x,y,g.coordinates):g.coordinates.some(p=>pipPoly(x,y,p));
+function bboxOf(g){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;const w=c=>typeof c[0]==='number'?(x0=Math.min(x0,c[0]),x1=Math.max(x1,c[0]),y0=Math.min(y0,c[1]),y1=Math.max(y1,c[1])):c.forEach(w);w(g.coordinates);return [x0,y0,x1,y1]}
+
+function prepareRaw(bRaw,pRaw){
+  const isPoly=g=>g&&(g.type==='Polygon'||g.type==='MultiPolygon');
+  ALL_P=pRaw.features.filter(f=>isPoly(f.geometry)).map((f,i)=>{
+    const o=f.properties||{}, la=num(o.luas_bidang||o.luas);
+    const id=txt(o.id||o.Id)||('bdg_'+i);
+    return {type:'Feature',geometry:f.geometry,properties:{_id:id,NIB:txt(o.NIB||o.nib),
+      status_nib:txt(o.status_nib_webgis||o.status_validasi_nib||o.nib_status||'KOSONG'),
+      sumber_nib:txt(o.sumber_nib||''),
+      tipe_hak:txt(o.tipe_hak!=null?o.tipe_hak:(o.TIPE_HAK!=null?o.TIPE_HAK:o.tipehak)),status:txt(o.STATUS!=null?o.STATUS:o.status),zona:txt(o.zona),luas_bidang:0,
+      _luas:la>0?la:Math.round(geomArea(f.geometry)*100)/100}};
+  });
+  const parcelById=new Map(ALL_P.map(f=>[f.properties._id,f.properties]));
+  ALL_B=bRaw.features.filter(f=>isPoly(f.geometry)&&(f.properties||{}).highway==null).map((f,i)=>{
+    const o=f.properties||{}, h=num(o.height_m), lb=num(o.luas_bangunan);
+    const id=txt(o.id)||('bgn_'+i), pid=txt(o.id_bidang_terhubung||o.pid);
+    const parcel=parcelById.get(pid);
+    const nib=parcel?txt(parcel.NIB):txt(o.NIB);
+    const nibStatus=parcel?txt(parcel.status_nib):txt(o.status_nib||'BELUM_TERHUBUNG');
+    return {type:'Feature',geometry:f.geometry,properties:{_id:id,_pid0:parcel?pid:'',NIB:nib,status_nib:nibStatus,
+      fungsi:txt(o.fungsi),height_m:h,_h:h>0?h:T_DEF,
+      luas_bangunan:lb>0?lb:Math.round(geomArea(f.geometry)*100)/100,luas_bidang:0,tipe_hak:txt(o.tipe_hak||(parcel&&parcel.tipe_hak)),status:txt(o.status||(parcel&&parcel.status)),lantai:parseInt(num(o.lantai))||0}};
+  });
+  // indeks grid bidang
+  const grid=new Map(), bb=ALL_P.map(f=>bboxOf(f.geometry));
+  ALL_P.forEach((f,i)=>{const [x0,y0,x1,y1]=bb[i];
+    for(let x=Math.floor(x0/GCS);x<=Math.floor(x1/GCS);x++)for(let y=Math.floor(y0/GCS);y<=Math.floor(y1/GCS);y++){
+      const k=x+'_'+y;(grid.get(k)||grid.set(k,[]).get(k)).push(i)}});
+  PGRID=grid; ALL_P.forEach((f,i)=>{f._bb=bb[i]});
+  // spatial join: bangunan → bidang dengan irisan terbesar (perkiraan lewat titik-sampel grid di dalam bangunan)
+  const NS=7;
+  ALL_B.forEach(b=>{
+    const g=b.geometry, bx=bboxOf(g), pts=[];
+    for(let i=0;i<NS;i++)for(let j=0;j<NS;j++){
+      const x=bx[0]+(bx[2]-bx[0])*(i+.5)/NS, y=bx[1]+(bx[3]-bx[1])*(j+.5)/NS;
+      if(pip(x,y,g)) pts.push([x,y]);
+    }
+    if(pts.length<3){ const ring=(g.type==='Polygon'?g.coordinates[0]:g.coordinates[0][0]).slice(0,-1); ring.forEach(c=>pts.push(c));
+      pts.push([ring.reduce((s,c)=>s+c[0],0)/ring.length,ring.reduce((s,c)=>s+c[1],0)/ring.length]); }
+    const hit=new Map();
+    for(const [x,y] of pts){
+      for(const i of (grid.get(Math.floor(x/GCS)+'_'+Math.floor(y/GCS))||[])){
+        const q=bb[i]; if(x<q[0]||x>q[2]||y<q[1]||y>q[3]) continue;
+        if(pip(x,y,ALL_P[i].geometry)){hit.set(i,(hit.get(i)||0)+1);break}
+      }
+    }
+    let best=-1,n=0; hit.forEach((c,i)=>{if(c>n){n=c;best=i}});
+    if(!b.properties._pid0&&best>=0&&n/pts.length>=MIN_OVERLAP) b.properties._pid0=ALL_P[best].properties._id;
+  });
+  const keep=(f,keys)=>{f._base={};keys.forEach(k=>f._base[k]=f.properties[k])};
+  ALL_P.forEach(f=>keep(f,Object.values(FIELD_P))); ALL_B.forEach(f=>keep(f,Object.values(FIELD_B)));
+  rebuildDigit();
+  applyRemoteAll();
+}
+function afterLoad(R){
+  BATAS=normalizeBatas(R.batas);
+  if(!BATAS) msg('Batas wilayah tidak termuat: file data/batas_sukarame.geojson tidak ditemukan atau kosong. Layer lain tetap tampil.',12000);
+  const t0=performance.now(); prepareRaw(R.b,R.p); console.log('Proses data di browser:',Math.round(performance.now()-t0),'ms');
+  const l=$('#loading'); if(l) l.remove();
+  const go=()=>{ addLayers(); addBatas(); fitData(); };
+  try{ go(); }catch(e){ map.once('style.load',go); }
+}
+/* Cadangan: pilih file GeoJSON secara manual (mis. saat dibuka lewat file://) */
+$('#fileIn').onchange=async e=>{
+  const R={};
+  for(const f of e.target.files){
+    const n=f.name.toLowerCase(), j=JSON.parse(await f.text());
+    if(/bangunan|lod1|building/.test(n)) R.b=j; else if(/bidang|tanah|parcel/.test(n)) R.p=j; else if(/sukarame|batas|kecamatan/.test(n)) R.batas=j;
+  }
+  if(!R.b||!R.p){msg('Pilih sekaligus file bangunan dan file bidang tanah (nama file memuat kata "bangunan" dan "bidang").');return}
+  afterLoad(R);
+};
+$('#btnFile').onclick=()=>$('#fileIn').click();
+
+/* ===== Lapisan perubahan: data asli (tertanam) + override (Firestore / localStorage) ===== */
+/* ===== Digitasi manual: objek baru disimpan di koleksi bidang_digit / bangunan_digit ===== */
+const DIGIT={bidang:new Map(),bangunan:new Map()};
+const DIGIT_COL={bidang:'bidang_digit',bangunan:'bangunan_digit'};
+let DIG_P=[],DIG_B=[],PGRID=null;
+// Firestore tidak mengizinkan array bersarang → koordinat disimpan sebagai array datar [lon1,lat1,lon2,lat2,...] (cincin luar, tanpa titik penutup)
+const flatCoords=g=>g.coordinates[0].slice(0,-1).flatMap(c=>[Math.round(c[0]*1e7)/1e7,Math.round(c[1]*1e7)/1e7]);
+function unflatCoords(a){const r=[];for(let i=0;i+1<a.length;i+=2)r.push([a[i],a[i+1]]);r.push(r[0]);return {type:'Polygon',coordinates:[r]}}
+function mkDigit(kind,id,d){
+  if(!d||!Array.isArray(d.koordinat)||d.koordinat.length<6) return null;
+  const g=unflatCoords(d.koordinat);
+  const base={_id:id,_dig:true,_del:false,_mod:true,_by:d.updatedBy||d.createdBy||'',_at:d.updatedAt||d.createdAt||0,
+    NIB:d.NIB||'',tipe_hak:d.tipe_hak||'',status:d.status||''};
+  const area=Math.round(geomArea(g)*100)/100;
+  let props;
+  if(kind==='bidang') props=Object.assign(base,{zona:d.zona||'',luas_bidang:0,_luas:+d.luas>0?+d.luas:area});
+  else{
+    const h=+d.tinggi>0?+d.tinggi:(+d.lantai>0?+d.lantai*S.tinggiLantai:T_DEF);
+    props=Object.assign(base,{_pid0:'',fungsi:d.fungsi||'',height_m:h,_h:h,luas_bangunan:+d.luas_bangunan>0?+d.luas_bangunan:area,luas_bidang:0,lantai:+d.lantai||0});
+  }
+  return {type:'Feature',geometry:g,properties:props,_bb:bboxOf(g)};
+}
+function samplePts(g){
+  const bx=bboxOf(g), pts=[], NS=7;
+  for(let i=0;i<NS;i++)for(let j=0;j<NS;j++){
+    const x=bx[0]+(bx[2]-bx[0])*(i+.5)/NS, y=bx[1]+(bx[3]-bx[1])*(j+.5)/NS; if(pip(x,y,g)) pts.push([x,y]);
+  }
+  if(pts.length<3){const ring=(g.type==='Polygon'?g.coordinates[0]:g.coordinates[0][0]).slice(0,-1); ring.forEach(c=>pts.push(c));
+    pts.push([ring.reduce((s,c)=>s+c[0],0)/ring.length,ring.reduce((s,c)=>s+c[1],0)/ring.length]);}
+  return pts;
+}
+function voteJoin(b,lookup){          // bidang dengan titik-sampel bangunan terbanyak
+  const pts=samplePts(b.geometry), hit=new Map();
+  for(const [x,y] of pts) for(const f of lookup(x,y)){
+    const q=f._bb; if(x<q[0]||x>q[2]||y<q[1]||y>q[3]) continue;
+    if(pip(x,y,f.geometry)){const id=f.properties._id; hit.set(id,(hit.get(id)||0)+1); break}
+  }
+  let best='',n=0; hit.forEach((c,id)=>{if(c>n){n=c;best=id}});
+  return best&&n/pts.length>=MIN_OVERLAP?best:'';
+}
+function rebuildDigit(){
+  DIG_P=[];DIG_B=[];
+  DIGIT.bidang.forEach((d,id)=>{const f=mkDigit('bidang',id,d); if(f) DIG_P.push(f)});
+  DIGIT.bangunan.forEach((d,id)=>{const f=mkDigit('bangunan',id,d); if(f) DIG_B.push(f)});
+  if(!ALL_P.length||!PGRID) return;
+  const rawLookup=(x,y)=>(PGRID.get(Math.floor(x/GCS)+'_'+Math.floor(y/GCS))||[]).map(i=>ALL_P[i]);
+  // bangunan asli yang belum punya bidang → coba bidang hasil digitasi
+  ALL_B.forEach(b=>{b.properties._pidD=(DIG_P.length&&!b.properties._pid0)?voteJoin(b,()=>DIG_P):''});
+  // bangunan hasil digitasi → bidang asli, lalu bidang digitasi
+  DIG_B.forEach(b=>{b.properties._pid0=voteJoin(b,(x,y)=>rawLookup(x,y).concat(DIG_P))});
+}
+const REMOTE={bidang:new Map(),bangunan:new Map()};
+const FIELD_P={NIB:'NIB',tipe_hak:'tipe_hak',status:'status',zona:'zona',luas:'_luas'};
+const FIELD_B={NIB:'NIB',fungsi:'fungsi',luas_bangunan:'luas_bangunan',lantai:'lantai',tipe_hak:'tipe_hak',status:'status',luas_bidang:'luas_bidang'};
+const canEdit=()=>!CLOUD.configured||(CLOUD.ready&&!!CLOUD.user);
+function gate(){
+  if(canEdit()) return true;
+  msg(CLOUD.err?'Tidak bisa menyimpan: '+CLOUD.err+'. Periksa pengaturan Firebase (Anonymous Auth & Rules).':'Belum tersambung ke Firestore, coba sesaat lagi.');
+  return false;
+}
+function applyRemoteAll(){
+  if(!ALL_P.length) return;
+  const run=(arr,kind,map)=>arr.forEach(f=>{
+    const q=f.properties; Object.assign(q,f._base); q._del=false;q._mod=false;q._by='';q._at=0;
+    const o=REMOTE[kind].get(q._id); if(!o) return;
+    q._mod=true; for(const k in map) if(o[k]!==undefined) q[map[k]]=o[k];
+    q._del=!!o.deleted; q._by=o.updatedBy||''; q._at=o.updatedAt||0;
+  });
+  run(ALL_P,'bidang',FIELD_P); run(ALL_B,'bangunan',FIELD_B);
+  parcels=ALL_P.concat(DIG_P).filter(f=>!f.properties._del); buildings=ALL_B.concat(DIG_B).filter(f=>!f.properties._del);
+  pById=new Map(parcels.map(f=>[f.properties._id,f])); bById=new Map(buildings.map(f=>[f.properties._id,f]));
+  buildings.forEach(b=>{const q=b.properties; q._pid=[q._pid0,q._pidD].find(x=>x&&pById.has(x))||''});
+  refresh(); updateCloudUI();
+}
+function persistLocal(){store.set('overrides',{bidang:[...REMOTE.bidang],bangunan:[...REMOTE.bangunan]});store.set('digit',{bidang:[...DIGIT.bidang],bangunan:[...DIGIT.bangunan]})}
+function cloudFail(e){msg('Gagal menyimpan ke Firestore: '+(e&&(e.code||e.message)||e)+'. Perubahan belum tersimpan di server.',0)}
+/* Rekaman LENGKAP sebuah objek (semua kolom), bukan hanya kolom yang diubah */
+const r2=v=>Math.round((+v||0)*100)/100;
+function fullRecord(kind,id){
+  const f=[...ALL_P,...DIG_P,...ALL_B,...DIG_B].find(x=>x.properties._id===id); if(!f) return null; const q=f.properties;
+  if(kind==='bidang') return {id:q._id,NIB:q.NIB,tipe_hak:q.tipe_hak,status:q.status,zona:q.zona,luas:r2(q._luas),deleted:!!q._del,
+    n_bangunan:q._n||0,luas_tapak:r2(q._fp),luas_lantai:r2(q._fl),zona_pakai:q._z||'',kdb_aktual:r2(q._luas?q._fp/q._luas*100:0),klb_aktual:r2(q._luas?q._fl/q._luas:0),kepatuhan:q._ok||''};
+  return {id:q._id,pid:q._pid0||'',NIB:q.NIB,fungsi:q.fungsi,height_m:q.height_m,tinggi:q._h,luas_bangunan:r2(q.luas_bangunan),luas_bidang:r2(q.luas_bidang),
+    tipe_hak:q.tipe_hak,status:q.status,lantai:q.lantai||0,jumlah_lantai:lantaiOf(q),deleted:!!q._del,kepatuhan:q._ok||''};
+}
+function saveEntity(kind,id,patch){
+  REMOTE[kind].set(id,Object.assign({},REMOTE[kind].get(id)||{},patch));
+  applyRemoteAll();                       // hitung nilai efektif terbaru
+  if(CLOUD.configured){
+    const rec=fullRecord(kind,id)||patch; // tulis SEMUA kolom objek ke Firestore
+    CLOUD.save(kind,id,rec).catch(cloudFail);
+  } else persistLocal();
+}
+function saveDigit(kind,id,patch,isNew){
+  DIGIT[kind].set(id,Object.assign({},DIGIT[kind].get(id)||{},patch));
+  rebuildDigit(); applyRemoteAll();
+  const d=DIGIT[kind].get(id);
+  const rec=Object.assign({},fullRecord(kind,id)||{},{koordinat:d.koordinat}); delete rec.deleted;   // simpan SEMUA kolom + koordinat
+  DIGIT[kind].set(id,Object.assign({},d,rec));
+  if(CLOUD.configured) CLOUD.saveDigit(DIGIT_COL[kind],id,rec,!!isNew).catch(cloudFail); else persistLocal();
+}
+function removeDigit(kind,id){
+  DIGIT[kind].delete(id); rebuildDigit(); applyRemoteAll();
+  if(CLOUD.configured) CLOUD.removeDigit(DIGIT_COL[kind],id).catch(cloudFail); else persistLocal();
+}
+function resetEntity(kind,id){
+  REMOTE[kind].delete(id);
+  if(CLOUD.configured) CLOUD.remove(kind,id).catch(cloudFail); else persistLocal();
+  applyRemoteAll();
+}
+if(!CLOUD.configured){ const ov=store.get('overrides',null); if(ov){REMOTE.bidang=new Map(ov.bidang);REMOTE.bangunan=new Map(ov.bangunan)}
+  const dg=store.get('digit',null); if(dg){DIGIT.bidang=new Map(dg.bidang);DIGIT.bangunan=new Map(dg.bangunan)} }
+
+/* ===== Jembatan ke modul Firebase (di bagian bawah file) ===== */
+window.APP={
+  attach(api){Object.assign(CLOUD,api)},
+  setReady(v){CLOUD.ready=v;updateCloudUI();buildSettings()},
+  setUser(u){CLOUD.user=u;updateCloudUI();buildSettings();if(selected)render(selected)},
+  cloudError(e){CLOUD.err=(e&&(e.code||e.message))||String(e);updateCloudUI();msg('Firestore: '+CLOUD.err,0)},
+  setRemote(kind,docs){REMOTE[kind]=new Map(docs);applyRemoteAll()},
+  setDigit(kind,docs){DIGIT[kind]=new Map(docs);rebuildDigit();applyRemoteAll()},
+  setAoi(docs){aoiSetCloud(docs)},
+  setConfig(c){
+    if(c.zona) for(const k in c.zona) if(ZONA[k]) Object.assign(ZONA[k],c.zona[k]);
+    if(c.tinggiLantai>0) S.tinggiLantai=c.tinggiLantai;
+    buildSettings(); refresh();
+  }
+};
+function updateCloudUI(){
+  const p=$('#cloud'),ci=$('#cloudInfo'); if(!p) return;
+  const n=REMOTE.bidang.size+REMOTE.bangunan.size;
+  if(!CLOUD.configured){p.className='pill';p.textContent='Mode lokal';
+    ci.innerHTML='<b>Mode lokal.</b> Perubahan hanya tersimpan di browser ini (objek diubah: '+n+'). Isi konfigurasi Firebase di bagian atas file (<code>APP_CFG</code>) untuk menyimpan ke Firestore.';return}
+  if(CLOUD.err){p.className='pill bad';p.textContent='⚠ Cloud error'}
+  else if(!CLOUD.ready||!CLOUD.user){p.className='pill';p.textContent='Menyambung…'}
+  else{p.className='pill ok';p.textContent='☁ Firestore'}
+  ci.innerHTML=(CLOUD.err?'<span style="color:var(--bad)">Error: '+esc(CLOUD.err)+'</span><br>':'')+
+    (CLOUD.user?'Terhubung sebagai <b>'+esc(CLOUD.user.email)+'</b> (anonim). Perubahan disimpan ke Firestore dan langsung tampil bagi semua pengguna.':'Menghubungkan ke Firestore…')+
+    '<br>Objek yang diubah: '+n;
+}
+function fitData(){
+  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+  const walk=c=>typeof c[0]==='number'?(x0=Math.min(x0,c[0]),x1=Math.max(x1,c[0]),y0=Math.min(y0,c[1]),y1=Math.max(y1,c[1])):c.forEach(walk);
+  parcels.forEach(f=>walk(f.geometry.coordinates));
+  if(x0<1e9) map.fitBounds([[x0,y0],[x1,y1]],{padding:60,pitch:is3d?60:0,bearing:-20,duration:0});
+}
+
+/* ================= PETA ================= */
+function start(){
+  map = new maplibregl.Map({container:'map',style:bm().style,center:[105.2935,-5.3715],zoom:15,pitch:60,bearing:-20,maxPitch:75});
+  map.addControl(new maplibregl.NavigationControl({visualizePitch:true}),'top-right');
+  map.addControl(new maplibregl.ScaleControl(),'bottom-right');
+  new ResizeObserver(()=>map&&map.resize()).observe($('#mapwrap'));
+  map.on('style.load',addLayers);
+  let tileErr=0;
+  map.on('error',e=>{
+    const er=e.error||{}; console.warn('Peta:',er.status,er.message||er);
+    if(/webgl/i.test(er.message||'')) msg('WebGL tidak aktif di browser ini. Aktifkan hardware acceleration lalu muat ulang.',0);
+    else if(er.status&&++tileErr===5) msg('Tile peta dasar gagal dimuat (koneksi/diblokir). Coba pilih peta dasar lain atau "Tanpa peta dasar".',0);
+  });
+  map.on('click',onClick);
+  map.on('mousemove',drawMove); map.on('dblclick',e=>{if(DRAW.active){e.preventDefault();drawFinish()}});
+  ['bangunan-3d','bidang-fill'].forEach(l=>{
+    map.on('mouseenter',l,()=>{if(!DRAW.active)map.getCanvas().style.cursor='pointer'});
+    map.on('mouseleave',l,()=>{if(!DRAW.active)map.getCanvas().style.cursor=''});
+  });
+  loadAll().then(afterLoad).catch(e=>{
+    $('#loading').textContent='Data belum termuat';
+    msg('Gagal memuat data: '+e.message+'. Pastikan file ada di folder data/ dan halaman dibuka lewat web server (GitHub Pages/Vercel), atau klik tombol 📂 untuk memilih file manual.',0);
+  });
+}
+
+function colorExpr(kind){
+  if(S.warna==='kepatuhan') return ['match',['get','_ok'],'ok',WARNA_OK.ok,'lebih',WARNA_OK.lebih,'kosong',WARNA_OK.kosong,WARNA_OK.nodata];
+  if(kind==='bidang') return ['match',['get','status'],'Sengketa','#f87171','Proses BPN','#fbbf24','Aman','#4ade80','#cbd5e1'];
+  const m=['match',['get','fungsi']]; for(const k in WARNA_FUNGSI) m.push(k,WARNA_FUNGSI[k]); m.push('#cfd8dc'); return m;
+}
+function firstSymbolLayer(){const l=map.getStyle().layers.find(x=>x.type==='symbol');return l?l.id:undefined}
+function addLayers(){
+  if(!map.getSource('bidang')) map.addSource('bidang',{type:'geojson',data:fc(parcels)});
+  if(!map.getSource('bangunan')) map.addSource('bangunan',{type:'geojson',data:fc(buildings)});
+  if(map.getLayer('bidang-fill')) return;
+  const first=firstSymbolLayer();
+  map.addLayer({id:'bidang-fill',type:'fill',source:'bidang',paint:{'fill-color':colorExpr('bidang'),'fill-opacity':0.28}},first);
+  map.addLayer({id:'bidang-line',type:'line',source:'bidang',paint:{'line-color':bm().dark?'#ffffff':'#1e293b','line-width':1,'line-opacity':0.8}},first);
+  map.addLayer({id:'bidang-sel',type:'line',source:'bidang',filter:['==',['get','_id'],''],paint:{'line-color':'#00e5ff','line-width':4}},first);
+  map.addLayer({id:'bangunan-3d',type:'fill-extrusion',source:'bangunan',paint:{
+    'fill-extrusion-color':colorExpr('bangunan'),'fill-extrusion-height':['get','_h'],'fill-extrusion-base':0,'fill-extrusion-opacity':0.92}});
+  map.addLayer({id:'bangunan-sel',type:'fill-extrusion',source:'bangunan',filter:['==',['get','_id'],''],paint:{
+    'fill-extrusion-color':'#00e5ff','fill-extrusion-height':['+',['get','_h'],0.4],'fill-extrusion-base':0,'fill-extrusion-opacity':1}});
+  applySelection(); addBatas(); applyVis(); addDrawLayers(); syncAoi();
+}
+function addBatas(){
+  if(!BATAS) return;
+  if(!map.getSource('batas')) map.addSource('batas',{type:'geojson',data:BATAS});
+  if(!map.getLayer('batas-line')) map.addLayer({id:'batas-line',type:'line',source:'batas',paint:{'line-color':'#ff0000','line-width':2.5}},'bangunan-3d');
+  applyVis();
+}
+const VIS_LAYERS={bidang:['bidang-fill','bidang-line','bidang-sel'],bangunan:['bangunan-3d','bangunan-sel'],batas:['batas-line']};
+function applyVis(){
+  if(!map) return;
+  for(const k in VIS_LAYERS) VIS_LAYERS[k].forEach(l=>{ if(map.getLayer(l)) map.setLayoutProperty(l,'visibility',S.vis[k]===false?'none':'visible'); });
+}
+function applySelection(){
+  if(!map||!map.getLayer('bidang-sel')) return;
+  map.setFilter('bidang-sel',['==',['get','_id'],selected&&selected.kind==='bidang'?selected.id:'']);
+  map.setFilter('bangunan-sel',['==',['get','_id'],selected&&selected.kind==='bangunan'?selected.id:'']);
+}
+function recolor(){
+  if(map&&map.getLayer('bidang-fill')){
+    map.setPaintProperty('bidang-fill','fill-color',colorExpr('bidang'));
+    map.setPaintProperty('bangunan-3d','fill-extrusion-color',colorExpr('bangunan'));
+  }
+  renderLegend();
+}
+
+/* ================= PERHITUNGAN KDB / KLB / KDH (aritmetika ringan) ================= */
+const lantaiOf=q=>q.lantai>0?q.lantai:Math.max(1,Math.floor(q._h/S.tinggiLantai+0.5));
+
+function recompute(){
+  const agg=new Map(); parcels.forEach(p=>agg.set(p.properties._id,{n:0,fp:0,fl:0,fn:{}}));
+  buildings.forEach(b=>{
+    const q=b.properties; const a=agg.get(q._pid); if(!a) return;
+    a.n++; a.fp+=q.luas_bangunan; a.fl+=q.luas_bangunan*lantaiOf(q);
+    if(q.fungsi) a.fn[q.fungsi]=(a.fn[q.fungsi]||0)+q.luas_bangunan;
+  });
+  parcels.forEach(p=>{
+    const q=p.properties,a=agg.get(q._id);
+    q._n=a.n;q._fp=a.fp;q._fl=a.fl;
+    let z='perumahan';
+    if(q.zona&&ZONA[q.zona]) z=q.zona;
+    else if(S.zonaOverride!=='auto') z=S.zonaOverride;
+    else{const top=Object.entries(a.fn).sort((x,y)=>y[1]-x[1])[0]; if(top&&FUNGSI_ZONA[top[0]]) z=FUNGSI_ZONA[top[0]];}
+    q._z=z;
+    const e=evalParcel(q); q._ok=!q._luas?'nodata':(!a.n?'kosong':(e.okKDB&&e.okKLB&&e.okKDH?'ok':'lebih'));
+  });
+  buildings.forEach(b=>{const p=pById.get(b.properties._pid); b.properties._ok=p?p.properties._ok:'nodata';});
+}
+function evalParcel(q){
+  const z=ZONA[q._z],L=q._luas||0;
+  const kdbA=L?q._fp/L*100:0, klbA=L?q._fl/L:0, terbuka=L-q._fp, hijauMin=z.kdh/100*L;
+  return {z,L,kdbIzin:z.kdb,kdbA,lantaiDasarMax:z.kdb/100*L,klbIzin:z.klb,klbA,totalMax:z.klb*L,
+    kdhMin:z.kdh,hijauMin,terbuka,kdhA:L?terbuka/L*100:0,
+    okKDB:kdbA<=z.kdb+1e-9,okKLB:klbA<=z.klb+1e-9,okKDH:terbuka>=hijauMin-1e-9};
+}
+function refresh(){
+  recompute();
+  if(map&&map.getSource('bangunan')){
+    map.getSource('bangunan').setData(fc(buildings));
+    map.getSource('bidang').setData(fc(parcels));
+  }
+  renderLegend(); renderStats();
+  if(selected) render(selected);
+}
+function renderStats(){
+  const T=parcels.filter(p=>p.properties._n>0);
+  const c=k=>T.filter(p=>p.properties._ok===k).length;
+  const kdb=T.filter(p=>!evalParcel(p.properties).okKDB).length, klb=T.filter(p=>!evalParcel(p.properties).okKLB).length, kdh=T.filter(p=>!evalParcel(p.properties).okKDH).length;
+  const inP=buildings.filter(b=>b.properties._pid).length;
+  $('#stats').innerHTML=
+   `<div><b>${fmt(buildings.length,0)}</b><span>Bangunan (${fmt(inP,0)} dalam bidang)</span></div>
+    <div><b>${fmt(parcels.length,0)}</b><span>Bidang (${fmt(T.length,0)} terbangun)</span></div>
+    <div class="g"><b>${fmt(c('ok'),0)}</b><span>Bidang sesuai</span></div>
+    <div class="r"><b>${fmt(c('lebih'),0)}</b><span>Bidang melanggar</span></div>
+    <div class="r"><b>${fmt(kdb,0)}</b><span>Melebihi KDB</span></div>
+    <div class="r"><b>${fmt(klb,0)}</b><span>Melebihi KLB</span></div>
+    <div class="r"><b>${fmt(kdh,0)}</b><span>Kurang KDH</span></div>`;
+}
+
+/* ================= PANEL INFO (kanan) ================= */
+const kv=(k,v,c='')=>`<div class="kv ${c}"><span>${k}</span><span>${v}</span></div>`;
+const badge=(ok,t1='Sesuai',t2='Melebihi')=>`<span class="badge ${ok?'ok':'bad'}">${ok?'✔ '+t1:'✖ '+t2}</span>`;
+const bar=(val,max,ok)=>`<div class="bar"><i style="width:${max?Math.min(val/max*100,100):0}%;background:${ok?'var(--ok)':'var(--bad)'}"></i></div>`;
+
+function onClick(e){
+  if(DRAW.active){drawClick(e);return}
+  if(!map.getLayer('bangunan-3d')) return;
+  const b=map.queryRenderedFeatures(e.point,{layers:['bangunan-3d']})[0];
+  if(b){select('bangunan',b.properties._id);return}
+  const p=map.queryRenderedFeatures(e.point,{layers:['bidang-fill']})[0];
+  if(p){select('bidang',p.properties._id);return}
+  closeInfo();
+}
+function select(kind,id){selected={kind,id};applySelection();render(selected)}
+function closeInfo(){selected=null;applySelection();$('#info').style.display='none'}
+function render(sel){
+  const el=$('#info'); const f=(sel.kind==='bangunan'?bById:pById).get(sel.id);
+  if(!f){closeInfo();return}
+  el.style.display='block';
+  el.innerHTML = sel.kind==='bangunan'?htmlBangunan(f):htmlBidang(f);
+  el.querySelector('[data-a=edit]').onclick=()=>{if(gate())openEdit(sel)};
+  el.querySelector('[data-a=del]').onclick=()=>doDelete(sel);
+  el.querySelector('[data-a=close]').onclick=closeInfo;
+}
+const actions=`<div class="actions"><button class="btn edit" data-a="edit">✏️ Edit</button><button class="btn del" data-a="del">🗑 Hapus</button><button class="btn" data-a="close">Tutup</button></div>`;
+
+const audit=q=>(q._dig?kv('Sumber','Digitasi manual'):'')+(q._mod?kv(q._dig?'Dicatat oleh':'Diubah',esc(q._by||'lokal')+(q._at?'<br><small>'+new Date(q._at).toLocaleString('id-ID')+'</small>':'')):'');
+function htmlBangunan(f){
+  const q=f.properties, p=pById.get(q._pid), pq=p&&p.properties;
+  const luasBidang=pq?pq._luas:(q.luas_bidang||0);
+  const hak=q.tipe_hak||(pq&&pq.tipe_hak)||'-', st=q.status||(pq&&pq.status)||'-', nib=(pq&&pq.NIB)||q.NIB||'-';
+  const nibStatus=(pq&&pq.status_nib)||q.status_nib||'BELUM_TERHUBUNG';
+  let h=`<div class="hd"><h2>Informasi Bangunan</h2><span class="id">ID: ${esc(q._id)}</span></div>`;
+  h+=kv('Luas bangunan (m²)',fmt(q.luas_bangunan),'hl')+kv('Luas bidang (m²)',pq?fmt(luasBidang):'<small>di luar bidang</small>','hl');
+  h+=kv('NIB',esc(nib))+kv('Status NIB',esc(nibStatus))+kv('Fungsi',esc(q.fungsi||'-'))+kv('Tinggi (m)',fmt(q.height_m))
+    +kv('Jumlah lantai',lantaiOf(q)+(q.lantai>0?'':' <small>(estimasi)</small>'))
+    +kv('Luas total lantai (m²)',fmt(q.luas_bangunan*lantaiOf(q)))+kv('Tipe hak',esc(hak))+kv('Status tanah',esc(st));
+  h+=`<div class="sec">Analisis KDB &amp; KLB</div>`;
+  if(!pq||!luasBidang){
+    h+=`<div class="note">Bangunan tidak berada pada bidang tanah, sehingga KDB/KLB tidak dapat dihitung.</div>`;
+  }else{
+    const e=evalParcel(pq);
+    const kdbSelf=q.luas_bangunan/luasBidang*100, klbSelf=q.luas_bangunan*lantaiOf(q)/luasBidang;
+    h+=kv('Zona',esc(e.z.nama)+` <small>(${esc(e.z.pasal)})</small>`);
+    h+=kv('KDB izin',fmt(e.kdbIzin)+' %')+kv('KDB bangunan ini',fmt(kdbSelf)+' %');
+    h+=pq._n>1?kv(`KDB aktual bidang (${pq._n} bgn)`,fmt(e.kdbA)+' % '+badge(e.okKDB)):kv('Status KDB',badge(e.okKDB));
+    h+=bar(e.kdbA,e.kdbIzin,e.okKDB);
+    h+=kv('Lantai dasar maks (m²)',fmt(e.lantaiDasarMax))+`<div class="formula">KDB izin × luas lahan</div>`;
+    h+=kv('KLB izin',fmt(e.klbIzin))+kv('KLB bangunan ini',fmt(klbSelf));
+    h+=pq._n>1?kv('KLB aktual bidang',fmt(e.klbA)+' '+badge(e.okKLB)):kv('Status KLB',badge(e.okKLB));
+    h+=bar(e.klbA,e.klbIzin,e.okKLB);
+    h+=kv('Total lantai maks (m²)',fmt(e.totalMax))+`<div class="formula">KLB izin × luas lahan</div>`;
+    h+=kv('Sisa lantai dasar (m²)',fmt(e.lantaiDasarMax-pq._fp))+kv('Sisa luas lantai (m²)',fmt(e.totalMax-pq._fl));
+    h+=`<div class="formula" style="margin-top:8px">KDB aktual = lantai dasar ÷ luas lahan × 100%. KLB aktual = total semua lantai ÷ luas lahan.</div>`;
+  }
+  return h+audit(q)+actions;
+}
+function htmlBidang(f){
+  const q=f.properties,e=evalParcel(q);
+  let h=`<div class="hd"><h2>Informasi Bidang Tanah</h2><span class="id">ID: ${esc(q._id)}</span></div>`;
+  h+=kv('Luas bidang (m²)',fmt(q._luas),'hl')+kv('NIB',esc(q.NIB||'-'))+kv('Status NIB',esc(q.status_nib||'KOSONG'))+kv('Status',esc(q.status||'-'))+kv('Tipe hak',esc(q.tipe_hak||'-'));
+  h+=`<div class="sec">Koefisien Dasar Hijau (KDH)</div>`;
+  h+=kv('Zona',esc(e.z.nama)+` <small>(${esc(e.z.pasal)})</small>`);
+  h+=kv('KDH minimum',fmt(e.kdhMin)+' %','hl');
+  h+=kv('Area hijau minimal (m²)',fmt(e.hijauMin))+`<div class="formula">KDH izin × luas lahan</div>`;
+  h+=kv('Ruang terbuka tersedia (m²)',fmt(e.terbuka)+' <small>('+fmt(e.kdhA)+' %)</small>')+`<div class="formula">Luas lahan − tapak bangunan (batas atas area hijau; perlu survei untuk area hijau riil)</div>`;
+  h+=kv('Status KDH',q._n?badge(e.okKDH,'Memenuhi','Kurang'):'<span class="badge na">Belum terbangun</span>');
+  h+=`<div class="sec">KDB &amp; KLB bidang</div>`+kv('Jumlah bangunan',q._n);
+  if(q._n){
+    h+=kv('KDB aktual / izin',fmt(e.kdbA)+' % / '+fmt(e.kdbIzin)+' %')+bar(e.kdbA,e.kdbIzin,e.okKDB)+kv('Status KDB',badge(e.okKDB));
+    h+=kv('KLB aktual / izin',fmt(e.klbA)+' / '+fmt(e.klbIzin))+bar(e.klbA,e.klbIzin,e.okKLB)+kv('Status KLB',badge(e.okKLB));
+  }
+  h+=kv('Lantai dasar maks (m²)',fmt(e.lantaiDasarMax))+kv('Total lantai maks (m²)',fmt(e.totalMax));
+  return h+audit(q)+actions;
+}
+
+/* ================= EDIT / HAPUS / EKSPOR ================= */
+function zonaOptions(sel,auto){
+  sel.innerHTML=(auto?'<option value="">Otomatis</option>':'')+Object.entries(ZONA).map(([k,z])=>`<option value="${k}">${esc(z.nama)}</option>`).join('');
+}
+let editing=null;
+function openEdit(sel){
+  editing=sel; const f=(sel.kind==='bangunan'?bById:pById).get(sel.id), q=f.properties;
+  const isB=sel.kind==='bangunan', p=isB?pById.get(q._pid):f, pq=p&&p.properties;
+  $('#mtitle').textContent=isB?'Edit Bangunan':'Edit Bidang Tanah';
+  $('#g_fungsi').style.display=isB?'block':'none'; $('#g_lb').style.display=isB?'block':'none';
+  ['g_lbd','g_hs','g_zona'].forEach(i=>$('#'+i).style.display=''); $('#bDel').style.display='';
+  $('#g_tinggi').style.display=(isB&&q._dig)?'block':'none'; if(isB&&q._dig) $('#e_tinggi').value=q.height_m||'';
+  $('#e_nib').value=q.NIB||'';
+  $('#e_lb').value=isB?q.luas_bangunan:'';
+  $('#e_lbd').value=pq?pq._luas:(q.luas_bidang||'');
+  if(isB){$('#e_fungsi').value=q.fungsi||'Permukiman';$('#e_lantai').value=q.lantai||'';}
+  $('#e_hak').value=(pq?pq.tipe_hak:q.tipe_hak)||'';
+  $('#e_status').value=(pq?pq.status:q.status)||'';
+  zonaOptions($('#e_zona'),true); $('#e_zona').value=(pq&&pq.zona)||'';
+  $('#bReset').style.display=REMOTE[sel.kind].has(sel.id)?'':'none';
+  $('#modal').style.display='flex';
+}
+$('#bCancel').onclick=()=>{$('#modal').style.display='none';drawClear()};
+$('#bSave').onclick=()=>{
+  if(!gate()) return;
+  if(editing&&editing.isNew){saveNew();return}
+  const sel=editing, f=(sel.kind==='bangunan'?bById:pById).get(sel.id); if(!f){$('#modal').style.display='none';return}
+  const q=f.properties, isB=sel.kind==='bangunan', p=isB?pById.get(q._pid):f, pq=p&&p.properties;
+  const hak=$('#e_hak').value, st=$('#e_status').value, zn=$('#e_zona').value, lbd=+$('#e_lbd').value, nib=$('#e_nib').value.trim();
+  if(isB){
+    const pb={NIB:nib,fungsi:$('#e_fungsi').value,lantai:Math.max(0,parseInt($('#e_lantai').value)||0)};
+    const lb=+$('#e_lb').value; if(lb>0) pb.luas_bangunan=lb;
+    if(!pq){pb.tipe_hak=hak;pb.status=st;if(lbd>0)pb.luas_bidang=lbd}
+    if(q._dig){const tt=+$('#e_tinggi').value; if(tt>0) pb.tinggi=tt; saveDigit('bangunan',q._id,pb)} else saveEntity('bangunan',q._id,pb);
+    if(pq){const pp={tipe_hak:hak,status:st,zona:zn}; if(lbd>0) pp.luas=lbd; pq._dig?saveDigit('bidang',pq._id,pp):saveEntity('bidang',pq._id,pp)}
+  }else{
+    const pp={NIB:nib,tipe_hak:hak,status:st,zona:zn}; if(lbd>0) pp.luas=lbd; q._dig?saveDigit('bidang',q._id,pp):saveEntity('bidang',q._id,pp);
+  }
+  $('#modal').style.display='none';
+};
+$('#bDel').onclick=()=>{ $('#modal').style.display='none'; doDelete(editing); };
+$('#bReset').onclick=()=>{ if(!gate()) return; if(confirm('Kembalikan objek ini ke data asli?')){resetEntity(editing.kind,editing.id);$('#modal').style.display='none'} };
+function doDelete(sel){
+  if(!gate()) return;
+  const f=(sel.kind==='bangunan'?bById:pById).get(sel.id), dig=!!(f&&f.properties._dig);
+  if(!confirm(dig?'Hapus objek hasil digitasi ini secara permanen'+(CLOUD.configured?' (untuk semua pengguna)':'')+'?'
+                  :'Hapus objek ini dari peta'+(CLOUD.configured?' (untuk semua pengguna)':'')+'? Data asli bisa dikembalikan lewat tombol "↩ Asli".')) return;
+  if(dig) removeDigit(sel.kind,sel.id); else saveEntity(sel.kind,sel.id,{deleted:true});
+  closeInfo();
+}
+function download(name,arr,kind){
+  const out=arr.map(f=>{const q=f.properties,o={};
+    for(const k in q) if(!k.startsWith('_')) o[k]=q[k];
+    o.id=q._id; delete o.luas_bidang;
+    if(kind==='bidang') o.luas=q._luas; else {o.pid=q._pid;o.tinggi=q._h}
+    return{type:'Feature',properties:o,geometry:f.geometry}});
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(fc(out))],{type:'application/geo+json'}));a.download=name;a.click();
+}
+$('#btnExp').onclick=()=>{download('bidang_edit.geojson',parcels,'bidang');setTimeout(()=>download('bangunan_edit.geojson',buildings,'bangunan'),400)};
+
+/* ================= DIGITASI MANUAL ================= */
+const DRAW={active:false,kind:'',pts:[],cursor:null};
+function drawFC(){
+  const p=DRAW.pts, c=(DRAW.active&&DRAW.cursor&&p.length)?DRAW.cursor:null, line=c?[...p,c]:[...p], f=[];
+  if(line.length>=3) f.push({type:'Feature',properties:{},geometry:{type:'Polygon',coordinates:[[...line,line[0]]]}});
+  if(line.length>=2) f.push({type:'Feature',properties:{},geometry:{type:'LineString',coordinates:line.length>=3?[...line,line[0]]:line}});
+  p.forEach(x=>f.push({type:'Feature',properties:{},geometry:{type:'Point',coordinates:x}}));
+  return fc(f);
+}
+function addDrawLayers(){
+  if(!map.getSource('draw')) map.addSource('draw',{type:'geojson',data:drawFC()});
+  if(map.getLayer('draw-fill')) return;
+  map.addLayer({id:'draw-fill',type:'fill',source:'draw',filter:['==',['geometry-type'],'Polygon'],paint:{'fill-color':'#00e5ff','fill-opacity':0.25}});
+  map.addLayer({id:'draw-line',type:'line',source:'draw',filter:['==',['geometry-type'],'LineString'],paint:{'line-color':'#00e5ff','line-width':2.5}});
+  map.addLayer({id:'draw-pts',type:'circle',source:'draw',filter:['==',['geometry-type'],'Point'],paint:{'circle-radius':5,'circle-color':'#ffffff','circle-stroke-color':'#00e5ff','circle-stroke-width':2}});
+}
+function updateDraw(){const s=map&&map.getSource('draw'); if(s) s.setData(drawFC())}
+function drawText(){
+  const n=DRAW.pts.length, nm=DRAW.kind==='bidang'?'BIDANG TANAH':'BANGUNAN';
+  let a=''; if(n>=3){a=' · luas ≈ '+fmt(geomArea({type:'Polygon',coordinates:[[...DRAW.pts,DRAW.pts[0]]]}))+' m²'}
+  $('#drawtxt').textContent='Menggambar '+nm+' — '+n+' titik'+a+(n<3?' (klik peta untuk menambah titik)':'');
+}
+function snap(e){
+  if(!$('#snapOn').checked) return null;
+  const r=10, ls=['bidang-fill','bangunan-3d'].filter(l=>map.getLayer(l)); let best=null,bd=r;
+  if(DRAW.pts.length>=3){const s=map.project(DRAW.pts[0]), d=Math.hypot(s.x-e.point.x,s.y-e.point.y); if(d<bd){bd=d;best=DRAW.pts[0]}}
+  const hits=ls.length?map.queryRenderedFeatures([[e.point.x-r,e.point.y-r],[e.point.x+r,e.point.y+r]],{layers:ls}):[];
+  for(const f of hits){
+    const walk=c=>{ if(typeof c[0]==='number'){const s=map.project(c), d=Math.hypot(s.x-e.point.x,s.y-e.point.y); if(d<bd){bd=d;best=[c[0],c[1]]}} else c.forEach(walk) };
+    walk(f.geometry.coordinates);
+  }
+  return best;
+}
+function selfIntersects(p){
+  const n=p.length, ccw=(a,b,c)=>(c[1]-a[1])*(b[0]-a[0])>(b[1]-a[1])*(c[0]-a[0]), X=(a,b,c,d)=>ccw(a,c,d)!==ccw(b,c,d)&&ccw(a,b,c)!==ccw(a,b,d);
+  for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){ if(j-i<=1||(i===0&&j===n-1)) continue; if(X(p[i],p[(i+1)%n],p[j],p[(j+1)%n])) return true }
+  return false;
+}
+function drawStart(kind){
+  if(!map||!ALL_P.length){msg('Data belum termuat.',4000);return}
+  if(!gate()) return;
+  if(DRAW.active) drawCleanup();
+  closeInfo();
+  Object.assign(DRAW,{active:true,kind,pts:[],cursor:null});
+  map.doubleClickZoom.disable(); map.getCanvas().style.cursor='crosshair'; map.easeTo({pitch:0,bearing:0,duration:400});
+  $('#drawbar').style.display='flex'; if(innerWidth<=820) $('#left').classList.add('hide');
+  drawText(); updateDraw();
+}
+function drawCleanup(){
+  DRAW.active=false; if(map){map.doubleClickZoom.enable(); map.getCanvas().style.cursor=''; map.easeTo({pitch:is3d?60:0,duration:400})}
+  $('#drawbar').style.display='none';
+}
+function drawClear(){DRAW.pts=[];DRAW.cursor=null;updateDraw()}
+function drawCancel(){ if(!DRAW.active) return; drawCleanup(); drawClear() }
+function drawUndo(){ if(!DRAW.active||!DRAW.pts.length) return; DRAW.pts.pop(); drawText(); updateDraw() }
+function drawMove(e){ if(!DRAW.active) return; DRAW.cursor=snap(e)||[e.lngLat.lng,e.lngLat.lat]; updateDraw() }
+function drawClick(e){
+  const pt=snap(e)||[e.lngLat.lng,e.lngLat.lat];
+  if(DRAW.pts.length>=3&&pt===DRAW.pts[0]){drawFinish();return}            // klik titik pertama = selesai
+  const last=DRAW.pts[DRAW.pts.length-1];
+  if(last){const a=map.project(last); if(Math.hypot(a.x-e.point.x,a.y-e.point.y)<4) return}  // abaikan klik ganda di titik sama
+  DRAW.pts.push(pt); drawText(); updateDraw();
+}
+function drawFinish(){
+  if(!DRAW.active) return; const p=DRAW.pts;
+  if(p.length<3){msg('Minimal 3 titik untuk membentuk poligon.',4000);return}
+  if(selfIntersects(p)){msg('Poligon berpotongan sendiri. Urungkan titik terakhir atau gambar ulang.',5000);return}
+  const geom={type:'Polygon',coordinates:[[...p,p[0]]]};
+  if(geomArea(geom)<1){msg('Luas poligon terlalu kecil (< 1 m²).',4000);return}
+  const kind=DRAW.kind; drawCleanup(); DRAW.cursor=null; updateDraw(); openNew(kind,geom);
+}
+function openNew(kind,geom){
+  const isB=kind==='bangunan', area=Math.round(geomArea(geom)*100)/100;
+  editing={kind,isNew:true,geom,id:(isB?'dgb_':'dgp_')+Date.now().toString(36)+Math.random().toString(36).slice(2,5)};
+  $('#mtitle').textContent=isB?'Bangunan Baru (Digitasi)':'Bidang Tanah Baru (Digitasi)';
+  $('#g_fungsi').style.display=isB?'block':'none'; $('#g_lb').style.display=isB?'block':'none'; $('#g_tinggi').style.display=isB?'block':'none';
+  $('#g_lbd').style.display=isB?'none':''; $('#g_hs').style.display=isB?'none':''; $('#g_zona').style.display=isB?'none':'';
+  $('#e_nib').value=''; $('#e_lb').value=isB?area:''; $('#e_lbd').value=isB?'':area;
+  $('#e_fungsi').value='Permukiman'; $('#e_lantai').value=''; $('#e_tinggi').value='';
+  $('#e_hak').value=''; $('#e_status').value=''; zonaOptions($('#e_zona'),true); $('#e_zona').value='';
+  $('#bDel').style.display='none'; $('#bReset').style.display='none';
+  $('#modal').style.display='flex';
+}
+function saveNew(){
+  const e=editing, kind=e.kind, id=e.id, koordinat=flatCoords(e.geom), area=Math.round(geomArea(e.geom)*100)/100, nib=$('#e_nib').value.trim();
+  let patch;
+  if(kind==='bidang'){ const l=+$('#e_lbd').value;
+    patch={koordinat,NIB:nib,tipe_hak:$('#e_hak').value,status:$('#e_status').value,zona:$('#e_zona').value,luas:l>0?l:area};
+  }else{ const lb=+$('#e_lb').value, lt=Math.max(0,parseInt($('#e_lantai').value)||0), th=+$('#e_tinggi').value;
+    patch={koordinat,NIB:nib,fungsi:$('#e_fungsi').value,luas_bangunan:lb>0?lb:area,lantai:lt,tinggi:th>0?th:(lt>0?lt*S.tinggiLantai:0)};
+  }
+  saveDigit(kind,id,patch,true);
+  $('#modal').style.display='none'; drawClear(); editing=null; select(kind,id);
+}
+document.addEventListener('keydown',e=>{
+  if(!DRAW.active) return; const tg=(e.target.tagName||'').toLowerCase(); if(tg==='input'||tg==='select'||tg==='textarea') return;
+  if(e.key==='Enter') drawFinish(); else if(e.key==='Escape') drawCancel(); else if(e.key==='Backspace'){e.preventDefault();drawUndo()}
+});
+$('#btnDrawP').onclick=()=>drawStart('bidang'); $('#btnDrawB').onclick=()=>drawStart('bangunan');
+$('#dUndo').onclick=drawUndo; $('#dDone').onclick=drawFinish; $('#dCancel').onclick=drawCancel;
+
+/* ================= AOI DIGITASI: impor GeoJSON → layer referensi (hide/unhide/hapus) ================= */
+/* Disimpan di Firestore (koleksi aoi_layers) sebagai satu dokumen per layer; geometri berupa string JSON (Firestore tidak
+   mengizinkan array bersarang). File > ~900 KB tidak muat di 1 dokumen → hanya aktif di sesi ini. Hide/unhide bersifat
+   per-pengguna (disimpan di browser), tidak ditulis ke Firestore. */
+const AOI_MAX=900000, AOI_COLORS=['#39ff14','#00ff41','#00ffa3','#7dff00'];
+const AOI_CLOUD=new Map(), AOI_LOCAL=new Map(), AOI_DRAWN=new Map();
+let AOI_HIDE=store.get('aoiHide',{})||{};
+const aoiAll=()=>[...AOI_CLOUD.values(),...AOI_LOCAL.values()];
+const aoiLay=(t,id)=>'aoi-'+t+'-'+id;
+const aoiColor=c=>/^#[0-9a-f]{6}$/i.test(c||'')?c:AOI_COLORS[0];
+function aoiNormalize(gj){
+  const OK={Polygon:1,MultiPolygon:1,LineString:1,MultiLineString:1,Point:1,MultiPoint:1}, gs=[];
+  const add=g=>{ if(!g) return; if(g.type==='GeometryCollection') (g.geometries||[]).forEach(add); else if(OK[g.type]&&Array.isArray(g.coordinates)) gs.push(g) };
+  if(gj&&gj.type==='FeatureCollection') (gj.features||[]).forEach(f=>f&&add(f.geometry)); else if(gj&&gj.type==='Feature') add(gj.geometry); else add(gj);
+  if(!gs.length) return null;
+  let proj=false,bad=false;
+  const chk=c=>{ if(typeof c[0]==='number'){ if(!isFinite(c[0])||!isFinite(c[1])) bad=true; else if(Math.abs(c[0])>180||Math.abs(c[1])>90) proj=true } else c.forEach(chk) };
+  gs.forEach(g=>chk(g.coordinates)); if(bad) return null;
+  const r7=v=>Math.round(v*1e7)/1e7;
+  const mp=c=>typeof c[0]==='number'?(proj?utmInv(c[0],c[1]):[c[0],c[1]]).map(r7):c.map(mp);   // buang Z, bulatkan 7 desimal, UTM 48S → lon/lat bila perlu
+  const out=gs.map(g=>({type:'Feature',properties:{},geometry:{type:g.type,coordinates:mp(g.coordinates)}}));
+  let ok=true; const chk2=c=>{ if(typeof c[0]==='number'){ if(Math.abs(c[0])>180||Math.abs(c[1])>90) ok=false } else c.forEach(chk2) };
+  out.forEach(f=>chk2(f.geometry.coordinates)); return ok?fc(out):null;
+}
+function aoiBounds(f){
+  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+  const w=c=>typeof c[0]==='number'?(x0=Math.min(x0,c[0]),x1=Math.max(x1,c[0]),y0=Math.min(y0,c[1]),y1=Math.max(y1,c[1])):c.forEach(w);
+  f.features.forEach(x=>w(x.geometry.coordinates)); return x0<1e9?[[x0,y0],[x1,y1]]:null;
+}
+function aoiFit(id){
+  const a=AOI_CLOUD.get(id)||AOI_LOCAL.get(id); if(!a||!map) return;
+  const b=aoiBounds(a.fc); if(b) map.fitBounds(b,{padding:60,duration:600,maxZoom:19});
+}
+function aoiPersistLocal(){
+  if(CLOUD.configured) return;
+  try{ localStorage.setItem('aoi',JSON.stringify([...AOI_LOCAL.values()].filter(a=>!a.mem).map(a=>({id:a.id,name:a.name,warna:a.warna,raw:a.raw})))) }
+  catch(e){ msg('Penyimpanan browser penuh; layer AOI hanya aktif selama sesi ini.',6000) }
+}
+async function aoiImport(files){
+  for(const f of files){
+    let gj; try{ gj=JSON.parse(await f.text()) }catch(e){ msg('“'+f.name+'” bukan file GeoJSON/JSON yang valid.',6000); continue }
+    const fcx=aoiNormalize(gj);
+    if(!fcx){ msg('“'+f.name+'”: tidak ada geometri valid atau koordinat tidak dikenali (harus WGS84 lon/lat atau UTM 48S).',8000); continue }
+    const raw=JSON.stringify(fcx), bytes=new Blob([raw]).size, id='aoi_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+    const name=f.name.replace(/\.(geo)?json$/i,'').slice(0,120)||'AOI', warna=AOI_COLORS[(AOI_CLOUD.size+AOI_LOCAL.size)%AOI_COLORS.length];
+    const base={id,name,warna,n:fcx.features.length,fc:fcx,raw};
+    if(bytes<=AOI_MAX){
+      if(CLOUD.configured){
+        if(!gate()) return;
+        AOI_CLOUD.set(id,Object.assign({src:'cloud'},base));      // tampil segera; snapshot Firestore menyinkronkan
+        CLOUD.saveAoi(id,{name,warna,jumlah:base.n,geojson:raw}).catch(e=>{AOI_CLOUD.delete(id);syncAoi();cloudFail(e)});
+      }else{ AOI_LOCAL.set(id,Object.assign({src:'local',mem:false},base)); aoiPersistLocal() }
+    }else{
+      AOI_LOCAL.set(id,Object.assign({src:'local',mem:true},base));
+      msg('“'+name+'” ('+fmt(bytes/1024,0)+' KB) terlalu besar untuk disimpan di Firestore (maks ± 900 KB). Layer tetap tampil, tetapi hilang saat halaman dimuat ulang.',10000);
+    }
+    syncAoi(); aoiFit(id);
+  }
+}
+function aoiSetCloud(docs){
+  const next=new Map();
+  docs.forEach(([id,d])=>{
+    const old=AOI_CLOUD.get(id); let fcx=null;
+    if(old&&old.raw===d.geojson) fcx=old.fc; else { try{ fcx=JSON.parse(d.geojson) }catch(e){} }
+    if(!fcx||!Array.isArray(fcx.features)) return;
+    next.set(id,{id,src:'cloud',name:d.name||'AOI',warna:aoiColor(d.warna),n:d.jumlah||fcx.features.length,fc:fcx,raw:d.geojson});
+  });
+  AOI_CLOUD.clear(); next.forEach((v,k)=>AOI_CLOUD.set(k,v)); syncAoi();
+}
+function aoiDelete(id){
+  const a=AOI_CLOUD.get(id)||AOI_LOCAL.get(id); if(!a) return;
+  if(a.src==='cloud'&&!gate()) return;
+  if(!confirm('Hapus layer AOI “'+a.name+'”'+(a.src==='cloud'?' (untuk semua pengguna)':'')+'?')) return;
+  if(a.src==='cloud'){ AOI_CLOUD.delete(id); CLOUD.removeAoi(id).catch(cloudFail) } else { AOI_LOCAL.delete(id); aoiPersistLocal() }
+  delete AOI_HIDE[id]; store.set('aoiHide',AOI_HIDE); syncAoi();
+}
+function aoiToggle(id,on){
+  if(on) delete AOI_HIDE[id]; else AOI_HIDE[id]=1; store.set('aoiHide',AOI_HIDE);
+  try{ ['fill','line','pts'].forEach(t=>{ if(map.getLayer(aoiLay(t,id))) map.setLayoutProperty(aoiLay(t,id),'visibility',on?'visible':'none') }) }catch(e){}
+}
+function syncAoi(){
+  aoiRenderList();
+  if(!map) return;
+  try{
+    const st=map.getStyle(); if(!st) return;
+    const all=aoiAll(), ids=new Set(all.map(a=>a.id));
+    st.layers.forEach(l=>{ const m=/^aoi-(fill|line|pts)-(.+)$/.exec(l.id); if(m&&!ids.has(m[2])) map.removeLayer(l.id) });
+    Object.keys(st.sources).forEach(s=>{ const m=/^aoi-src-(.+)$/.exec(s); if(m&&!ids.has(m[1])&&map.getSource(s)) map.removeSource(s) });
+    const before=map.getLayer('draw-fill')?'draw-fill':undefined;      // sketsa digitasi tetap di atas AOI
+    all.forEach(a=>{
+      const s='aoi-src-'+a.id;
+      if(!map.getSource(s)){ map.addSource(s,{type:'geojson',data:a.fc}); AOI_DRAWN.set(a.id,a.fc) }
+      else if(AOI_DRAWN.get(a.id)!==a.fc){ map.getSource(s).setData(a.fc); AOI_DRAWN.set(a.id,a.fc) }
+      if(!map.getLayer(aoiLay('fill',a.id))){
+        map.addLayer({id:aoiLay('fill',a.id),type:'fill',source:s,filter:['==',['geometry-type'],'Polygon'],paint:{'fill-color':a.warna,'fill-opacity':0}},before);
+        map.addLayer({id:aoiLay('line',a.id),type:'line',source:s,paint:{'line-color':a.warna,'line-width':2.5,'line-dasharray':[2,1.5]}},before);
+        map.addLayer({id:aoiLay('pts',a.id),type:'circle',source:s,filter:['==',['geometry-type'],'Point'],paint:{'circle-radius':5,'circle-color':a.warna,'circle-stroke-color':'#ffffff','circle-stroke-width':1.5}},before);
+      }
+      const v=AOI_HIDE[a.id]?'none':'visible';
+      ['fill','line','pts'].forEach(t=>map.setLayoutProperty(aoiLay(t,a.id),'visibility',v));
+    });
+  }catch(e){ /* style belum siap: addLayers() memanggil syncAoi lagi saat style.load */ }
+}
+function aoiRenderList(){
+  const el=$('#aoiList'); if(!el) return; const all=aoiAll();
+  if(!all.length){ el.innerHTML='<p class="src" style="margin:0">Belum ada AOI. Impor lewat tombol di panel Digitasi.</p>'; return }
+  el.innerHTML=all.map(a=>`<div class="aoi-row" data-id="${a.id}">
+    <input type="checkbox" class="aoi-v" ${AOI_HIDE[a.id]?'':'checked'} title="Tampilkan / sembunyikan">
+    <i class="aoi-sw" style="background:${a.warna}"></i>
+    <span class="aoi-n" title="${esc(a.name)}">${esc(a.name)}<small>${a.n} objek${a.mem?' · hanya sesi ini':''}</small></span>
+    <button class="btn aoi-z" title="Zoom ke layer">⌖</button><button class="btn del aoi-d" title="Hapus layer">🗑</button></div>`).join('');
+}
+$('#aoiList').addEventListener('click',e=>{
+  const row=e.target.closest('.aoi-row'); if(!row) return; const id=row.dataset.id;
+  if(e.target.closest('.aoi-z')) aoiFit(id); else if(e.target.closest('.aoi-d')) aoiDelete(id);
+});
+$('#aoiList').addEventListener('change',e=>{ if(e.target.classList.contains('aoi-v')) aoiToggle(e.target.closest('.aoi-row').dataset.id,e.target.checked) });
+$('#btnAoi').onclick=()=>$('#aoiIn').click();
+$('#aoiIn').onchange=async e=>{ await aoiImport([...e.target.files]); e.target.value='' };
+if(!CLOUD.configured){
+  (store.get('aoi',[])||[]).forEach(d=>{ try{ const f=JSON.parse(d.raw); if(f&&Array.isArray(f.features)) AOI_LOCAL.set(d.id,{id:d.id,src:'local',mem:false,name:d.name||'AOI',warna:aoiColor(d.warna),n:f.features.length,fc:f,raw:d.raw}) }catch(e){} });
+}
+aoiRenderList();
+
+/* ================= PENGATURAN ================= */
+function buildSettings(){
+  $('#ztable').innerHTML='<tr><th>Zona</th><th>KDB %</th><th>KLB</th><th>KDH %</th></tr>'+Object.entries(ZONA).map(([k,z])=>
+    `<tr><td>${esc(z.nama)}<br><small style="color:var(--mut)">${esc(z.pasal)}</small></td>
+     <td><input type="number" data-z="${k}" data-f="kdb" value="${z.kdb}" min="0" max="100" step="1"></td>
+     <td><input type="number" data-z="${k}" data-f="klb" value="${z.klb}" min="0" step="0.1"></td>
+     <td><input type="number" data-z="${k}" data-f="kdh" value="${z.kdh}" min="0" max="100" step="1"></td></tr>`).join('');
+  const ro=CLOUD.configured&&!canEdit();
+  $('#ztable').querySelectorAll('input').forEach(i=>{i.disabled=ro;i.onchange=()=>{
+    if(!gate()){buildSettings();return}
+    ZONA[i.dataset.z][i.dataset.f]=Math.max(0,+i.value||0); persistZona(); refresh();}});
+  $('#tinggiLantai').disabled=ro; $('#btnReset').disabled=ro; $('#zhint').style.display=ro?'block':'none';
+  $('#zonaOverride').innerHTML='<option value="auto">Otomatis (menurut fungsi bangunan)</option>'+Object.entries(ZONA).map(([k,z])=>`<option value="${k}">Paksa semua: ${esc(z.nama)}</option>`).join('');
+  $('#zonaOverride').value=S.zonaOverride; $('#tinggiLantai').value=S.tinggiLantai; $('#warna').value=S.warna; $('#basemap').value=S.basemap;
+}
+const saveS=()=>store.set('settings',S);
+$('#zonaOverride').onchange=e=>{S.zonaOverride=e.target.value;saveS();refresh()};
+$('#tinggiLantai').onchange=e=>{if(!gate()){buildSettings();return}S.tinggiLantai=Math.max(2,+e.target.value||4);saveS();persistZona();refresh()};
+$('#warna').onchange=e=>{S.warna=e.target.value;saveS();recolor()};
+$('#basemap').onchange=e=>{S.basemap=e.target.value;saveS();map.setStyle(bm().style,{diff:false})};
+function persistZona(){
+  if(CLOUD.configured){
+    const z={}; for(const k in ZONA) z[k]={kdb:ZONA[k].kdb,klb:ZONA[k].klb,kdh:ZONA[k].kdh};
+    CLOUD.saveConfig({zona:z,tinggiLantai:S.tinggiLantai}).catch(cloudFail);
+  } else store.set('zona',ZONA);
+}
+$('#btnReset').onclick=()=>{if(!gate())return;store.set('zona',null);initZona();buildSettings();persistZona();refresh()};
+$('#btnLeft').onclick=()=>{const l=$('#left'); if(innerWidth<=820) l.classList.toggle('hide'); else l.classList.toggle('hide');};
+document.querySelectorAll('[data-vis]').forEach(c=>{c.checked=S.vis[c.dataset.vis]!==false;c.onchange=()=>{S.vis[c.dataset.vis]=c.checked;saveS();applyVis()}});
+$('#btn3d').onclick=()=>{is3d=!is3d;$('#btn3d').textContent=is3d?'3D':'2D';map.easeTo({pitch:is3d?60:0,bearing:is3d?-20:0,duration:600})};
+if(innerWidth<=820) $('#left').classList.add('hide');
+
+function renderLegend(){
+  const rows=S.warna==='kepatuhan'
+    ?[['ok','Sesuai KDB/KLB/KDH'],['lebih','Melebihi batas'],['kosong','Bidang belum terbangun'],['nodata','Tanpa data bidang']].map(([k,t])=>[WARNA_OK[k],t])
+    :Object.entries(WARNA_FUNGSI).map(([k,c])=>[c,k]);
+  $('#legend').innerHTML='<b>Legenda</b>'+rows.map(([c,t])=>`<div><i style="background:${c}"></i>${esc(t)}</div>`).join('');
+}
+
+/* ================= INIT ================= */
+buildSettings(); renderLegend();
+updateCloudUI();
+start();
+</script>
+<script type="module">
+/* Modul Firebase: Firestore (data) + Authentication (login). Aktif hanya bila APP_CFG.firebase.apiKey terisi. */
+const cfg=(window.APP_CFG||{}).firebase||{};
+if(cfg.apiKey){
+  try{
+    const V='10.14.1', B='https://www.gstatic.com/firebasejs/'+V+'/';
+    const [A,F,Au]=await Promise.all([import(B+'firebase-app.js'),import(B+'firebase-firestore.js'),import(B+'firebase-auth.js')]);
+    const app=A.initializeApp(cfg);
+    let db; try{db=F.initializeFirestore(app,{localCache:F.persistentLocalCache({tabManager:F.persistentMultipleTabManager()})})}catch(e){db=F.getFirestore(app)}
+    const auth=Au.getAuth(app);
+    const who=()=>auth.currentUser?'anonim-'+auth.currentUser.uid.slice(0,5):'';
+    const ms=v=>v&&v.toMillis?v.toMillis():0;
+    const conv=s=>s.docs.map(d=>{const x=d.data();return [d.id,{...x,updatedAt:ms(x.updatedAt),createdAt:ms(x.createdAt)}]});
+    const C=window.__CLOUD__={};
+    // Dipasang ke objek CLOUD milik aplikasi lewat APP (lihat di bawah)
+    const API={
+      save:(kind,id,patch)=>F.setDoc(F.doc(db,kind,id),{...patch,updatedBy:who(),updatedAt:F.serverTimestamp()},{merge:true}),
+      remove:(kind,id)=>F.deleteDoc(F.doc(db,kind,id)),
+      saveConfig:c=>F.setDoc(F.doc(db,'config','parameter'),{...c,updatedBy:who(),updatedAt:F.serverTimestamp()},{merge:true}),
+      // digitasi: dokumen baru memuat createdBy/createdAt; semua kolom + koordinat ditulis penuh
+      saveDigit:(col,id,rec,isNew)=>F.setDoc(F.doc(db,col,id),{...rec,updatedBy:who(),updatedAt:F.serverTimestamp(),...(isNew?{createdBy:who(),createdAt:F.serverTimestamp()}:{})},{merge:true}),
+      removeDigit:(col,id)=>F.deleteDoc(F.doc(db,col,id)),
+      // AOI hasil impor GeoJSON (geometri disimpan sebagai string JSON)
+      saveAoi:(id,d)=>F.setDoc(F.doc(db,'aoi_layers',id),{...d,createdBy:who(),createdAt:F.serverTimestamp()}),
+      removeAoi:id=>F.deleteDoc(F.doc(db,'aoi_layers',id))
+    };
+    window.APP.attach(API);
+    Au.onAuthStateChanged(auth,u=>window.APP.setUser(u?{email:'anonim-'+u.uid.slice(0,5),uid:u.uid}:null));
+    Au.signInAnonymously(auth).catch(e=>window.APP.cloudError(e.code==='auth/operation-not-allowed'||e.code==='auth/admin-restricted-operation'?{code:'Anonymous Auth belum diaktifkan (Firebase Console → Authentication → Sign-in method → Anonymous)'}:e));
+    const err=e=>window.APP.cloudError(e);
+    F.onSnapshot(F.collection(db,'bidang'),s=>window.APP.setRemote('bidang',conv(s)),err);
+    F.onSnapshot(F.collection(db,'bangunan'),s=>window.APP.setRemote('bangunan',conv(s)),err);
+    F.onSnapshot(F.collection(db,'bidang_digit'),s=>window.APP.setDigit('bidang',conv(s)),err);
+    F.onSnapshot(F.collection(db,'bangunan_digit'),s=>window.APP.setDigit('bangunan',conv(s)),err);
+    F.onSnapshot(F.collection(db,'aoi_layers'),s=>window.APP.setAoi(conv(s)),err);
+    F.onSnapshot(F.doc(db,'config','parameter'),s=>{if(s.exists())window.APP.setConfig(s.data())},err);
+    window.APP.setReady(true);
+  }catch(e){ console.error(e); window.APP.cloudError(e); }
+}
+</script>
+</body>
+</html>
